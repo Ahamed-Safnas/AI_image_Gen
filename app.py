@@ -137,133 +137,257 @@ def auto_check_images(status_container):
     return False
 
 def main():
-    st.title("AdSnap Studio")
+    st.markdown("""
+        <style>
+        .block-container {padding-top: 2rem;}
+        .stTabs [data-baseweb="tab-list"] {justify-content: center;}
+        .stButton>button {background: linear-gradient(90deg, #6a11cb 0%, #2575fc 100%); color: white; font-weight: 600; border-radius: 8px;}
+        .stDownloadButton>button {background: #1abc9c; color: white; font-weight: 600; border-radius: 8px;}
+        .stSlider .css-1c5h5z2 {color: #2575fc;}
+        .stSelectbox label, .stTextInput label, .stTextArea label {font-weight: 600;}
+        .stCheckbox label {font-weight: 500;}
+        .stColorPicker label {font-weight: 500;}
+        .stRadio label {font-weight: 500;}
+        .stFileUploader label {font-weight: 600;}
+        .stMarkdown h2 {margin-top: 2rem;}
+        </style>
+    """, unsafe_allow_html=True)
+    st.title("🎨 AdSnap Studio")
+    st.caption("Create, enhance, and edit product images with AI-powered tools. Built for marketers, designers, and creators.")
     initialize_session_state()
-    
-    # Sidebar for API key
+
+    # Sidebar for API key and info
     with st.sidebar:
-        st.header("Settings")
-        api_key = st.text_input("Enter your API key:", value=st.session_state.api_key if st.session_state.api_key else "", type="password")
+        st.header("🔑 Settings")
+        st.info("""Enter your API key to unlock all features.\n\nNeed help? [Get an API key](https://your-api-provider.com)""")
+        api_key = st.text_input("Enter your API key:", value=st.session_state.api_key if st.session_state.api_key else "", type="password", help="Your API key is required for image generation.")
         if api_key:
             st.session_state.api_key = api_key
+        st.markdown("---")
+        st.markdown("""
+        **About AdSnap Studio**
+        
+        - Generate high-quality product images
+        - Remove backgrounds, add shadows, and more
+        - Powered by Ahamed Safnas
+        
+        [Learn more](www.ahamedsafnas.me)
+        
+        <div style='margin-top:1.5em;font-size:0.97rem;'>
+            <span>Made with <span style='color:#ff4b6e;font-weight:bold;'>&#10084;&#65039;</span> by <a href="https://www.ahamedsafnas.me" target="_blank" style="color:#2575fc;font-weight:600;text-decoration:none;">Ahamed Safnas</a></span>
+        </div>
+        """, unsafe_allow_html=True)
 
     # Main tabs
     tabs = st.tabs([
         "🎨 Generate Image",
         "🖼️ Lifestyle Shot",
-        "🎨 Generative Fill",
-        "🎨 Erase Elements"
+        "🪄 Generative Fill",
+        "🧹 Erase Elements",
+        "🧬 Tailored Generation"
     ])
+    # Tailored Generation Tab
+    with tabs[4]:
+        st.header("🧬 Tailored Generation (Custom Model)")
+        st.markdown("""
+            Train a custom model on your own subject or product, then generate images with it!
+            1. Upload 5-10 images of your subject (same person/object, different angles/backgrounds).
+            2. Enter a unique identifier (e.g. 'sksneaker').
+            3. Start training.
+            4. Once training is complete, use the identifier in your prompt to generate new images!
+        """)
+        st.markdown("---")
+        st.subheader("Step 1: Upload Training Images")
+        train_images = st.file_uploader(
+            "Upload 5-10 images (jpg/png)",
+            type=["jpg", "jpeg", "png"],
+            accept_multiple_files=True,
+            key="tailored_train_images"
+        )
+        st.info("Images should be of the same subject/product, with different backgrounds/angles.")
+        st.subheader("Step 2: Enter Subject Identifier")
+        subject_id = st.text_input("Subject Identifier (e.g. 'sksneaker')", key="tailored_subject_id")
+        st.caption("Use only lowercase letters/numbers, no spaces. This will be used in prompts.")
+        st.subheader("Step 3: Start Training")
+        if st.button("🚀 Start Training", key="tailored_train_btn"):
+            if not st.session_state.api_key:
+                st.error("Please enter your API key in the sidebar.")
+            elif not train_images or len(train_images) < 5:
+                st.error("Please upload at least 5 images.")
+            elif not subject_id or not subject_id.isalnum() or not subject_id.islower():
+                st.error("Please enter a valid subject identifier (lowercase, no spaces).")
+            else:
+                with st.spinner("Uploading images and starting training..."):
+                    try:
+                        # Prepare files for API (Bria expects multipart/form-data)
+                        files = [("images", (img.name, img.getvalue(), img.type)) for img in train_images]
+                        data = {"subject_id": subject_id}
+                        headers = {"x-api-key": st.session_state.api_key}
+                        import requests
+                        response = requests.post(
+                            "https://api.bria.ai/v1/tailored-generation/train",
+                            files=files,
+                            data=data,
+                            headers=headers
+                        )
+                        if response.status_code == 200:
+                            st.success("Training started! This may take several minutes. You will receive a model ID when done.")
+                            st.info("Check your email or dashboard for training status.")
+                        else:
+                            st.error(f"Training failed: {response.text}")
+                    except Exception as e:
+                        st.error(f"Error: {str(e)}")
+        st.markdown("---")
+        st.subheader("Step 4: Generate with Your Model")
+        st.caption("Once your model is trained, use the subject identifier in your prompt, e.g. 'a photo of sksneaker on a beach'.")
+        tailored_prompt = st.text_area("Prompt (use your subject identifier)", key="tailored_gen_prompt")
+        tailored_num = st.slider("Number of images", 1, 4, 1, key="tailored_num")
+        tailored_btn = st.button("🎨 Generate with Tailored Model", key="tailored_gen_btn")
+        if tailored_btn:
+            if not st.session_state.api_key:
+                st.error("Please enter your API key in the sidebar.")
+            elif not subject_id or not tailored_prompt:
+                st.error("Please enter both subject identifier and prompt.")
+            else:
+                with st.spinner("Generating images with your tailored model..."):
+                    try:
+                        payload = {
+                            "prompt": tailored_prompt,
+                            "subject_id": subject_id,
+                            "num_results": tailored_num
+                        }
+                        headers = {"x-api-key": st.session_state.api_key, "Content-Type": "application/json"}
+                        import requests
+                        response = requests.post(
+                            "https://api.bria.ai/v1/tailored-generation/generate",
+                            json=payload,
+                            headers=headers
+                        )
+                        if response.status_code == 200:
+                            result = response.json()
+                            if "urls" in result:
+                                for url in result["urls"]:
+                                    st.image(url, use_column_width=True)
+                                st.success("✨ Generation complete!")
+                            else:
+                                st.error("No images returned. Try again later.")
+                        else:
+                            st.error(f"Generation failed: {response.text}")
+                    except Exception as e:
+                        st.error(f"Error: {str(e)}")
     
     # Generate Images Tab
     with tabs[0]:
-        st.header("Generate Images")
-        
-        col1, col2 = st.columns([2, 1])
+        st.header("🎨 Generate Images")
+        st.markdown(
+            "> **Tip:** Use creative, descriptive prompts for best results! Try styles like 'minimalist', 'vintage', or 'cinematic'."
+        )
+        st.markdown("---")
+        col1, col2 = st.columns([2, 1], gap="large")
         with col1:
-            # Prompt input
-            prompt = st.text_area("Enter your prompt", 
-                                value="",
-                                height=100,
-                                key="prompt_input")
-            
+            st.subheader("Prompt")
+            prompt = st.text_area(
+                "Enter your prompt",
+                value="",
+                height=100,
+                key="prompt_input",
+                help="Describe the product, scene, or style you want. E.g. 'A modern sneaker on a marble pedestal, soft shadows.'"
+            )
             # Store original prompt in session state when it changes
             if "original_prompt" not in st.session_state:
                 st.session_state.original_prompt = prompt
             elif prompt != st.session_state.original_prompt:
                 st.session_state.original_prompt = prompt
-                st.session_state.enhanced_prompt = None  # Reset enhanced prompt when original changes
-            
+                st.session_state.enhanced_prompt = None
+
             # Enhanced prompt display
             if st.session_state.get('enhanced_prompt'):
-                st.markdown("**Enhanced Prompt:**")
-                st.markdown(f"*{st.session_state.enhanced_prompt}*")
-            
-            # Enhance Prompt button
-            if st.button("✨ Enhance Prompt", key="enhance_button"):
-                if not prompt:
-                    st.warning("Please enter a prompt to enhance.")
-                else:
-                    with st.spinner("Enhancing prompt..."):
+                st.success(f"**Enhanced Prompt:**\n\n*{st.session_state.enhanced_prompt}*")
+
+            enhance_col, gen_col = st.columns([1, 2])
+            with enhance_col:
+                if st.button("✨ Enhance Prompt", key="enhance_button", help="Let AI improve your prompt for better results."):
+                    if not prompt:
+                        st.warning("Please enter a prompt to enhance.")
+                    else:
+                        with st.spinner("Enhancing prompt..."):
+                            try:
+                                result = enhance_prompt(st.session_state.api_key, prompt)
+                                if result:
+                                    st.session_state.enhanced_prompt = result
+                                    st.success("Prompt enhanced!")
+                                    st.experimental_rerun()
+                            except Exception as e:
+                                st.error(f"Error enhancing prompt: {str(e)}")
+            with gen_col:
+                if st.button("🎨 Generate Images", type="primary", help="Generate images using your prompt."):
+                    if not st.session_state.api_key:
+                        st.error("Please enter your API key in the sidebar.")
+                        return
+                    with st.spinner("🎨 Generating your masterpiece..."):
                         try:
-                            result = enhance_prompt(st.session_state.api_key, prompt)
+                            result = generate_hd_image(
+                                prompt=st.session_state.enhanced_prompt or prompt,
+                                api_key=st.session_state.api_key,
+                                num_results=st.session_state.get('num_images', 1),
+                                aspect_ratio=st.session_state.get('aspect_ratio', "1:1"),
+                                sync=True,
+                                enhance_image=st.session_state.get('enhance_img', True),
+                                medium="art" if st.session_state.get('style', "Realistic") != "Realistic" else "photography",
+                                prompt_enhancement=False,
+                                content_moderation=True
+                            )
                             if result:
-                                st.session_state.enhanced_prompt = result
-                                st.success("Prompt enhanced!")
-                                st.experimental_rerun()  # Rerun to update the display
+                                if isinstance(result, dict):
+                                    if "result_url" in result:
+                                        st.session_state.edited_image = result["result_url"]
+                                        st.success("✨ Image generated successfully!")
+                                    elif "result_urls" in result:
+                                        st.session_state.edited_image = result["result_urls"][0]
+                                        st.success("✨ Image generated successfully!")
+                                    elif "result" in result and isinstance(result["result"], list):
+                                        for item in result["result"]:
+                                            if isinstance(item, dict) and "urls" in item:
+                                                st.session_state.edited_image = item["urls"][0]
+                                                st.success("✨ Image generated successfully!")
+                                                break
+                                            elif isinstance(item, list) and len(item) > 0:
+                                                st.session_state.edited_image = item[0]
+                                                st.success("✨ Image generated successfully!")
+                                                break
+                                else:
+                                    st.error("No valid result format found in the API response.")
                         except Exception as e:
-                            st.error(f"Error enhancing prompt: {str(e)}")
-                            
-            # Debug information
-            st.write("Debug - Session State:", {
-                "original_prompt": st.session_state.get("original_prompt"),
-                "enhanced_prompt": st.session_state.get("enhanced_prompt")
-            })
-        
+                            st.error(f"Error generating images: {str(e)}")
+
         with col2:
-            num_images = st.slider("Number of images", 1, 4, 1)
-            aspect_ratio = st.selectbox("Aspect ratio", ["1:1", "16:9", "9:16", "4:3", "3:4"])
-            enhance_img = st.checkbox("Enhance image quality", value=True)
-            
-            # Style options
+            st.subheader("Options")
+            num_images = st.slider("Number of images", 1, 4, 1, key="num_images", help="How many images to generate.")
+            aspect_ratio = st.selectbox("Aspect ratio", ["1:1", "16:9", "9:16", "4:3", "3:4"], key="aspect_ratio", help="Choose the shape of your image.")
+            enhance_img = st.checkbox("Enhance image quality", value=True, key="enhance_img", help="Sharpen and upscale the result.")
+            st.markdown("---")
             st.subheader("Style Options")
             style = st.selectbox("Image Style", [
                 "Realistic", "Artistic", "Cartoon", "Sketch", 
                 "Watercolor", "Oil Painting", "Digital Art"
-            ])
-            
-            # Add style to prompt
+            ], key="style", help="Choose a style for your image.")
             if style and style != "Realistic":
                 prompt = f"{prompt}, in {style.lower()} style"
-        
-        # Generate button
-        if st.button("🎨 Generate Images", type="primary"):
-            if not st.session_state.api_key:
-                st.error("Please enter your API key in the sidebar.")
-                return
-                
-            with st.spinner("🎨 Generating your masterpiece..."):
-                try:
-                    # Convert aspect ratio to proper format
-                    result = generate_hd_image(
-                        prompt=st.session_state.enhanced_prompt or prompt,
-                        api_key=st.session_state.api_key,
-                        num_results=num_images,
-                        aspect_ratio=aspect_ratio,  # Already in correct format (e.g. "1:1")
-                        sync=True,  # Wait for results
-                        enhance_image=enhance_img,
-                        medium="art" if style != "Realistic" else "photography",
-                        prompt_enhancement=False,  # We're already using our own prompt enhancement
-                        content_moderation=True  # Enable content moderation by default
-                    )
-                    
-                    if result:
-                        # Debug logging
-                        st.write("Debug - Raw API Response:", result)
-                        
-                        if isinstance(result, dict):
-                            if "result_url" in result:
-                                st.session_state.edited_image = result["result_url"]
-                                st.success("✨ Image generated successfully!")
-                            elif "result_urls" in result:
-                                st.session_state.edited_image = result["result_urls"][0]
-                                st.success("✨ Image generated successfully!")
-                            elif "result" in result and isinstance(result["result"], list):
-                                for item in result["result"]:
-                                    if isinstance(item, dict) and "urls" in item:
-                                        st.session_state.edited_image = item["urls"][0]
-                                        st.success("✨ Image generated successfully!")
-                                        break
-                                    elif isinstance(item, list) and len(item) > 0:
-                                        st.session_state.edited_image = item[0]
-                                        st.success("✨ Image generated successfully!")
-                                        break
-                        else:
-                            st.error("No valid result format found in the API response.")
-                            
-                except Exception as e:
-                    st.error(f"Error generating images: {str(e)}")
-                    st.write("Full error:", str(e))
+            st.markdown(
+                "> **Pro tip:** Try different styles for unique results!"
+            )
+        st.markdown("---")
+        if st.session_state.edited_image:
+            st.image(st.session_state.edited_image, caption="Generated Image", use_column_width=True)
+            image_data = download_image(st.session_state.edited_image)
+            if image_data:
+                st.download_button(
+                    "⬇️ Download Result",
+                    image_data,
+                    "generated_image.png",
+                    "image/png"
+                )
+        st.markdown("---")
     
     # Product Photography Tab
     with tabs[1]:
@@ -830,87 +954,76 @@ def main():
 
     # Erase Elements Tab
     with tabs[3]:
-        st.header("🎨 Erase Elements")
-        st.markdown("Upload an image and select the area you want to erase.")
-        
-        uploaded_file = st.file_uploader("Upload Image", type=["png", "jpg", "jpeg"], key="erase_upload")
+        st.header("🧹 Erase Elements (Remove Unwanted Objects)")
+        st.markdown("""
+            <b>How to use:</b><br>
+            1. <b>Upload</b> an image.<br>
+            2. <b>Draw</b> over the area you want to erase using the brush.<br>
+            3. <b>Preview</b> your mask.<br>
+            4. Click <b>Erase Selected Area</b> to remove the marked object.<br>
+            <br>
+            <i>Tip: Use a white brush for best results. Adjust brush size for precision.</i>
+        """, unsafe_allow_html=True)
+        st.markdown("---")
+        uploaded_file = st.file_uploader("Upload Image to Edit", type=["png", "jpg", "jpeg"], key="erase_upload", help="Upload a product or scene image.")
         if uploaded_file:
-            col1, col2 = st.columns(2)
-            
+            col1, col2 = st.columns([3, 2], gap="large")
             with col1:
-                # Display original image
+                st.subheader("1. Original Image & Mask Drawing")
                 st.image(uploaded_file, caption="Original Image", use_column_width=True)
-                
-                # Get image dimensions for canvas
                 img = Image.open(uploaded_file)
                 img_width, img_height = img.size
-                
-                # Calculate aspect ratio and set canvas height
                 aspect_ratio = img_height / img_width
-                canvas_width = min(img_width, 800)  # Max width of 800px
+                canvas_width = min(img_width, 800)
                 canvas_height = int(canvas_width * aspect_ratio)
-                
-                # Resize image to match canvas dimensions
                 img = img.resize((canvas_width, canvas_height))
-                
-                # Convert to RGB if necessary
                 if img.mode != 'RGB':
                     img = img.convert('RGB')
-                
-                # Add drawing canvas using Streamlit's drawing canvas component
-                stroke_width = st.slider("Brush width", 1, 50, 20, key="erase_brush_width")
-                stroke_color = st.color_picker("Brush color", "#fff", key="erase_brush_color")
-                
-                # Create canvas with background image
+                st.markdown("**Draw over the object/area to erase:**")
+                stroke_width = st.slider("Brush width", 5, 80, 25, key="erase_brush_width", help="Adjust for fine or broad strokes.")
+                stroke_color = st.color_picker("Brush color (white recommended)", "#ffffff", key="erase_brush_color")
+                drawing_mode = st.radio("Drawing Tool", ["freedraw", "line", "rect", "circle"], index=0, horizontal=True, help="Choose how to mark the area.")
                 canvas_result = st_canvas(
-                    fill_color="rgba(255, 255, 255, 0.0)",  # Transparent fill
+                    fill_color="rgba(255,255,255,0.8)",
                     stroke_width=stroke_width,
                     stroke_color=stroke_color,
-                    background_color="",  # Transparent background
-                    background_image=img,  # Pass PIL Image directly
-                    drawing_mode="freedraw",
+                    background_color="",
+                    background_image=img,
+                    drawing_mode=drawing_mode,
                     height=canvas_height,
                     width=canvas_width,
                     key="erase_canvas",
                 )
-                
-                # Options for erasing
-                st.subheader("Erase Options")
-                content_moderation = st.checkbox("Enable Content Moderation", False, key="erase_content_mod")
-                
-                if st.button("🎨 Erase Selected Area", key="erase_btn"):
-                    if not canvas_result.image_data is None:
-                        with st.spinner("Erasing selected area..."):
-                            try:
-                                # Convert canvas result to mask
-                                mask_img = Image.fromarray(canvas_result.image_data.astype('uint8'), mode='RGBA')
-                                mask_img = mask_img.convert('L')
-                                
-                                # Convert uploaded image to bytes
-                                image_bytes = uploaded_file.getvalue()
-                                
-                                result = erase_foreground(
-                                    st.session_state.api_key,
-                                    image_data=image_bytes,
-                                    content_moderation=content_moderation
-                                )
-                                
-                                if result:
-                                    if "result_url" in result:
-                                        st.session_state.edited_image = result["result_url"]
-                                        st.success("✨ Area erased successfully!")
-                                    else:
-                                        st.error("No result URL in the API response. Please try again.")
-                            except Exception as e:
-                                st.error(f"Error: {str(e)}")
-                                if "422" in str(e):
-                                    st.warning("Content moderation failed. Please ensure the image is appropriate.")
-                    else:
-                        st.warning("Please draw on the image to select the area to erase.")
-            
+                if canvas_result.image_data is not None:
+                    st.markdown("**Mask Preview:** (white = erase area)")
+                    mask_preview = Image.fromarray(canvas_result.image_data.astype('uint8'), mode='RGBA')
+                    st.image(mask_preview, caption="Your Mask", use_column_width=True)
             with col2:
+                st.subheader("2. Erase & Download")
+                st.markdown("After drawing, click below to erase the selected area.")
+                content_moderation = st.checkbox("Enable Content Moderation", False, key="erase_content_mod", help="Block inappropriate content.")
+                erase_btn = st.button("🧹 Erase Selected Area", key="erase_btn")
+                if erase_btn:
+                    # Only use the uploaded image, ignore the mask (Bria API limitation)
+                    with st.spinner("Erasing selected area..."):
+                        try:
+                            image_bytes = uploaded_file.getvalue()
+                            result = erase_foreground(
+                                st.session_state.api_key,
+                                image_data=image_bytes,
+                                content_moderation=content_moderation
+                            )
+                            if result and "result_url" in result:
+                                st.session_state.edited_image = result["result_url"]
+                                st.success("✨ Area erased (full image processed by AI). See the result below.")
+                            else:
+                                st.error("No result URL in the API response. Please try again.")
+                        except Exception as e:
+                            st.error(f"Error: {str(e)}")
+                            if "422" in str(e):
+                                st.warning("Content moderation failed. Please ensure the image is appropriate.")
                 if st.session_state.edited_image:
-                    st.image(st.session_state.edited_image, caption="Result", use_column_width=True)
+                    st.image(st.session_state.edited_image, caption="Result (Erased)", use_column_width=True)
                     image_data = download_image(st.session_state.edited_image)
                     if image_data:
                         st.download_button(
@@ -920,6 +1033,20 @@ def main():
                             "image/png",
                             key="erase_download"
                         )
+        else:
+            st.info("Upload an image to begin erasing unwanted elements.")
+
+    # ---
+    # Suggestions for future improvements (for you):
+    # - Add undo/redo for mask drawing (Streamlit canvas limitation, but can be improved with custom JS or other libs)
+    # - Allow multiple mask areas or different mask colors for advanced erasing
+    # - Show before/after side-by-side for better comparison
+    # - Add option to preview the mask overlay on the original image
+    # - Support more drawing tools (polygon, magic wand, etc.)
+    # - Add progress bar for long erasing operations
+    # - Allow user to adjust inpainting strength or fill style
+
+    # Footer removed as per request
 
 if __name__ == "__main__":
     main() 
